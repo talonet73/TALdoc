@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <uses-permission android:name="android.permission.CAMERA" />
  <uses-feature android:name="android.hardware.camera" android:required="false"/>
+ <queries>
+  <intent>
+   <action android:name="android.media.action.IMAGE_CAPTURE" />
+  </intent>
+ </queries>
  <application android:allowBackup="false" android:label="TALdoc AI" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:icon="@drawable/app_icon">
   <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.provider" android:exported="false" android:grantUriPermissions="true">
    <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/>

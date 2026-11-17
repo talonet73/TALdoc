@@ -1,6 +1,8 @@
 package it.tal.taldoc
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -84,6 +87,13 @@ class MainActivity : ComponentActivity() {
      busy = false
     }
    }
+   val requestCameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    if (!granted) {
+     status = "Permesso fotocamera negato. Necessario per scattare foto."
+    } else {
+     status = "Permesso concesso. Premi di nuovo Fotocamera."
+    }
+   }
    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
     if (uri != null) scope.launch { try { exportPdf(uri, query, answer); status = "PDF esportato" } catch (e: Exception) { status = "Errore export: ${e.message}" } }
    }
@@ -120,6 +130,10 @@ class MainActivity : ComponentActivity() {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
        Button(onClick = { importer.launch(arrayOf("application/pdf", "image/*")) }, enabled = !busy) { Text("Importa PDF / foto") }
        OutlinedButton(onClick = {
+        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+         requestCameraPermission.launch(Manifest.permission.CAMERA)
+         return@OutlinedButton
+        }
         try {
          // Recover session directory after the one-shot cleanup.
          if (!sessionDir.exists() && !sessionDir.mkdirs()) error("Impossibile creare cartella foto")
