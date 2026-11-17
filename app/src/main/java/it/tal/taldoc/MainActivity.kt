@@ -84,10 +84,10 @@ class MainActivity : ComponentActivity() {
      busy = false
     }
    }
-   val exportPdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+   val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
     if (uri != null) scope.launch { try { exportPdf(uri, query, answer); status = "PDF esportato" } catch (e: Exception) { status = "Errore export: ${e.message}" } }
    }
-   val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+   val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
     if (uri != null) scope.launch { try { exportCsv(uri); status = "CSV esportato" } catch (e: Exception) { status = "Errore export: ${e.message}" } }
    }
    LaunchedEffect(Unit) {
@@ -147,8 +147,8 @@ class MainActivity : ComponentActivity() {
        }
       }
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-       OutlinedButton(onClick = { exportPdf.launch("TALdoc-risultati.pdf") }, enabled = pages.isNotEmpty()) { Text("PDF") }
-       OutlinedButton(onClick = { exportCsv.launch("TALdoc-dati.csv") }, enabled = pages.isNotEmpty()) { Text("CSV") }
+       OutlinedButton(onClick = { pdfLauncher.launch("TALdoc-risultati.pdf") }, enabled = pages.isNotEmpty()) { Text("PDF") }
+       OutlinedButton(onClick = { csvLauncher.launch("TALdoc-dati.csv") }, enabled = pages.isNotEmpty()) { Text("CSV") }
        Button(onClick = { clearSession(); finish() }, colors = ButtonDefaults.buttonColors(containerColor = burgundy)) { Text("Esci e cancella") }
       }
      }
