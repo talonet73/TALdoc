@@ -120,9 +120,17 @@ class MainActivity : ComponentActivity() {
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
        Button(onClick = { importer.launch(arrayOf("application/pdf", "image/*")) }, enabled = !busy) { Text("Importa PDF / foto") }
        OutlinedButton(onClick = {
-        val file = File(sessionDir, "foto-${UUID.randomUUID()}.jpg")
-        cameraUri = FileProvider.getUriForFile(this@MainActivity, "${packageName}.provider", file)
-        camera.launch(cameraUri!!)
+        try {
+         // Recover session directory after the one-shot cleanup.
+         if (!sessionDir.exists() && !sessionDir.mkdirs()) error("Impossibile creare cartella foto")
+         val file = File.createTempFile("foto-", ".jpg", sessionDir)
+         val uri = FileProvider.getUriForFile(this@MainActivity, "${packageName}.provider", file)
+         cameraUri = uri
+         camera.launch(uri)
+        } catch (e: Exception) {
+         status = "Fotocamera non disponibile: ${e.javaClass.simpleName}: ${e.message}"
+         android.util.Log.e("TALdocCamera", "Impossibile avviare fotocamera", e)
+        }
        }, enabled = !busy) { Text("Fotocamera") }
       }
       Text(status, color = burgundy, fontSize = 13.sp)
