@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
        enabled = !busy && pages.isNotEmpty()
       ) { Text("Elabora") }
 
-      Text("Elaborazione offline sui testi OCR della sessione. LLM locale non ancora disponibile.", fontSize = 11.sp, color = burgundy)
+      Text("Elaborazione offline sui documenti della sessione.", fontSize = 11.sp, color = burgundy)
       Box(Modifier.weight(1f).fillMaxWidth()) {
        Column(Modifier.verticalScroll(rememberScrollState())) {
         if (answer.isNotBlank()) {
