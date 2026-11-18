@@ -1,28 +1,24 @@
 package it.tal.taldoc
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
+import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
-import android.graphics.pdf.PdfDocument
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -49,12 +44,17 @@ import java.util.UUID
 private val teal = Color(0xFF007C80)
 private val burgundy = Color(0xFF8C2945)
 private val ochre = Color(0xFFD4A52A)
+
 data class PageText(val document: String, val page: Int, val text: String)
+
+enum class QueryMode { SEARCH, TRANSCRIPTION, SUMMARY, QUESTION }
+
 class MainActivity : ComponentActivity() {
  private val pages = mutableStateListOf<PageText>()
  private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
  private val sessionDir by lazy { File(cacheDir, "session").apply { mkdirs() } }
  private fun clearSession() { sessionDir.deleteRecursively(); pages.clear() }
+
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
   clearSession()
@@ -66,7 +66,9 @@ class MainActivity : ComponentActivity() {
    var status by remember { mutableStateOf("Pronto per acquisire documenti") }
    var query by remember { mutableStateOf("") }
    var answer by remember { mutableStateOf("") }
+   var mode by remember { mutableStateOf(QueryMode.SEARCH) }
    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
     scope.launch {
      busy = true
@@ -88,11 +90,8 @@ class MainActivity : ComponentActivity() {
     }
    }
    val requestCameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    if (!granted) {
-     status = "Permesso fotocamera negato. Necessario per scattare foto."
-    } else {
-     status = "Permesso concesso. Premi di nuovo Fotocamera."
-    }
+    if (!granted) status = "Permesso fotocamera negato. Necessario per scattare foto."
+    else status = "Permesso concesso. Premi di nuovo Fotocamera."
    }
    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
     if (uri != null) scope.launch { try { exportPdf(uri, query, answer); status = "PDF esportato" } catch (e: Exception) { status = "Errore export: ${e.message}" } }
@@ -100,8 +99,8 @@ class MainActivity : ComponentActivity() {
    val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
     if (uri != null) scope.launch { try { exportCsv(uri); status = "CSV esportato" } catch (e: Exception) { status = "Errore export: ${e.message}" } }
    }
+
    LaunchedEffect(Unit) {
-    // Progress is driven by actual initialization checkpoints, not a simulated timer.
     withContext(Dispatchers.IO) { sessionDir.mkdirs() }
     progress = 0.4f
     withContext(Dispatchers.IO) { recognizer }
@@ -111,6 +110,7 @@ class MainActivity : ComponentActivity() {
     delay(180)
     ready = true
    }
+
    MaterialTheme(colorScheme = lightColorScheme(primary = teal, secondary = burgundy, tertiary = ochre)) {
     if (!ready) {
      Column(Modifier.fillMaxSize().background(teal).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
        Icon(Icons.Default.Search, "Logo TALdoc", tint = teal, modifier = Modifier.size(38.dp))
        Text("TALdoc AI", fontSize = 24.sp, color = teal, fontWeight = FontWeight.Bold)
       }
-      Spacer(Modifier.height(16.dp))
+      Spacer(Modifier.height(12.dp))
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
        Button(onClick = { importer.launch(arrayOf("application/pdf", "image/*")) }, enabled = !busy) { Text("Importa PDF / foto") }
        OutlinedButton(onClick = {
@@ -135,7 +135,6 @@ class MainActivity : ComponentActivity() {
          return@OutlinedButton
         }
         try {
-         // Recover session directory after the one-shot cleanup.
          if (!sessionDir.exists() && !sessionDir.mkdirs()) error("Impossibile creare cartella foto")
          val file = File.createTempFile("foto-", ".jpg", sessionDir)
          val uri = FileProvider.getUriForFile(this@MainActivity, "${packageName}.provider", file)
@@ -151,16 +150,51 @@ class MainActivity : ComponentActivity() {
       if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
       Text("Documenti: ${pages.map { it.document }.distinct().size} · Pagine: ${pages.size}", fontWeight = FontWeight.SemiBold)
       Spacer(Modifier.height(8.dp))
-      OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Cerca nei documenti") }, placeholder = { Text("Parola, numero, frase...") })
-      Button(onClick = {
-       val matches = pages.filter { it.text.contains(query.trim(), ignoreCase = true) }
-       answer = if (query.isBlank()) "Inserisci una ricerca." else if (matches.isEmpty()) "Nessun risultato trovato." else matches.joinToString("\n\n") { "${it.document}, pagina ${it.page}: " + it.text.take(550) }
-      }, enabled = !busy) { Text("Cerca") }
-      Text("Ricerca testuale offline. Chat AI non ancora disponibile.", fontSize = 12.sp, color = burgundy)
+
+      Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+       QueryMode.entries.forEach { m ->
+        FilterChip(
+         selected = mode == m,
+         onClick = { mode = m },
+         label = {
+          Text(when (m) {
+           QueryMode.SEARCH -> "Cerca"
+           QueryMode.TRANSCRIPTION -> "Trascrizione"
+           QueryMode.SUMMARY -> "Riassunto"
+           QueryMode.QUESTION -> "Domanda"
+          }, fontSize = 12.sp)
+         }
+        )
+       }
+      }
+      Spacer(Modifier.height(6.dp))
+
+      OutlinedTextField(
+       value = query,
+       onValueChange = { query = it },
+       modifier = Modifier
+        .fillMaxWidth()
+        .heightIn(min = 120.dp, max = 200.dp),
+       label = { Text("Scrivi frase, domanda o richiesta") },
+       placeholder = { Text("Es: riassumi il documento, trascrivi la pagina 2, qual è la data del contratto...") },
+       minLines = 4,
+       maxLines = 8
+      )
+      Spacer(Modifier.height(6.dp))
+      Button(
+       onClick = {
+        answer = processQuery(pages, query, mode)
+       },
+       enabled = !busy && pages.isNotEmpty()
+      ) { Text("Elabora") }
+
+      Text("Elaborazione offline sui testi OCR della sessione. LLM locale non ancora disponibile.", fontSize = 11.sp, color = burgundy)
       Box(Modifier.weight(1f).fillMaxWidth()) {
        Column(Modifier.verticalScroll(rememberScrollState())) {
-        if (answer.isNotBlank()) Text(answer)
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        if (answer.isNotBlank()) {
+         Text(answer, fontSize = 14.sp)
+         HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        }
         pages.forEach { page ->
          Text("${page.document} · Pagina ${page.page}", fontWeight = FontWeight.Bold, color = teal)
          Text(page.text.take(700), fontSize = 13.sp)
@@ -178,6 +212,52 @@ class MainActivity : ComponentActivity() {
    }
   }
  }
+
+ private fun processQuery(pages: List<PageText>, rawQuery: String, mode: QueryMode): String {
+  val q = rawQuery.trim()
+  if (pages.isEmpty()) return "Nessun documento caricato."
+  if (q.isBlank() && mode != QueryMode.TRANSCRIPTION && mode != QueryMode.SUMMARY) return "Inserisci una frase o una domanda."
+
+  return when (mode) {
+   QueryMode.SEARCH -> {
+    val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
+    if (matches.isEmpty()) "Nessun risultato trovato per \"$q\"."
+    else matches.joinToString("\n\n") { "${it.document}, pagina ${it.page}:\n${it.text.take(800)}" }
+   }
+   QueryMode.TRANSCRIPTION -> {
+    val filtered = if (q.isBlank()) pages else pages.filter { it.text.contains(q, ignoreCase = true) || it.document.contains(q, ignoreCase = true) }
+    if (filtered.isEmpty()) "Nessuna pagina corrisponde."
+    else filtered.joinToString("\n\n---\n\n") { "### ${it.document} · Pagina ${it.page}\n${it.text}" }
+   }
+   QueryMode.SUMMARY -> {
+    val full = pages.joinToString("\n") { it.text }
+    val sentences = full.split(Regex("[.!?\\n]+")).map { it.trim() }.filter { it.length > 40 }
+    val scored = sentences.map { s -> s to (if (q.isBlank()) s.length else s.split(q, ignoreCase = true).size - 1 + s.length / 20) }
+     .sortedByDescending { it.second }
+     .take(8)
+     .map { it.first }
+    if (scored.isEmpty()) "Impossibile generare riassunto."
+    else "Riassunto estrattivo (offline):\n\n" + scored.joinToString("\n• ") { "• $it." }
+   }
+   QueryMode.QUESTION -> {
+    val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
+    if (matches.isEmpty()) {
+     "Non ho trovato passaggi espliciti che rispondano a: \"$q\".\n\nTesto disponibile (estratti):\n" +
+      pages.take(3).joinToString("\n\n") { "${it.document} p.${it.page}: ${it.text.take(400)}" }
+    } else {
+     "In base ai documenti caricati:\n\n" +
+      matches.joinToString("\n\n") { p ->
+       val idx = p.text.indexOf(q, ignoreCase = true)
+       val start = (idx - 120).coerceAtLeast(0)
+       val end = (idx + q.length + 280).coerceAtMost(p.text.length)
+       val excerpt = p.text.substring(start, end).trim()
+       "${p.document}, pagina ${p.page}:\n…$excerpt…"
+      }
+    }
+   }
+  }
+ }
+
  private suspend fun importDocument(uri: Uri, onStatus: (String) -> Unit) {
   val mime = contentResolver.getType(uri) ?: ""
   val name = uri.lastPathSegment?.substringAfterLast('/')?.take(60) ?: "Documento"
@@ -223,6 +303,7 @@ class MainActivity : ComponentActivity() {
    } finally { bitmap.recycle() }
   }
  }
+
  private suspend fun exportCsv(uri: Uri) = withContext(Dispatchers.IO) {
   contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { out ->
    out.appendLine("documento,pagina,testo")
@@ -232,10 +313,11 @@ class MainActivity : ComponentActivity() {
    }
   } ?: error("Destinazione non disponibile")
  }
+
  private suspend fun exportPdf(uri: Uri, question: String, response: String) = withContext(Dispatchers.IO) {
   val pdf = PdfDocument()
   try {
-   val lines = (listOf("TALdoc AI", "Ricerca: $question", "Risultato: $response") + pages.flatMap { p -> listOf("${p.document} - pagina ${p.page}") + p.text.lines() }).flatMap { line -> line.chunked(85).ifEmpty { listOf("") } }
+   val lines = (listOf("TALdoc AI", "Richiesta: $question", "Risultato: $response") + pages.flatMap { p -> listOf("${p.document} - pagina ${p.page}") + p.text.lines() }).flatMap { line -> line.chunked(85).ifEmpty { listOf("") } }
    var index = 0
    var number = 1
    while (index < lines.size) {
@@ -250,6 +332,7 @@ class MainActivity : ComponentActivity() {
    contentResolver.openOutputStream(uri)?.use { pdf.writeTo(it) } ?: error("Destinazione non disponibile")
   } finally { pdf.close() }
  }
+
  override fun onDestroy() {
   recognizer.close()
   super.onDestroy()
