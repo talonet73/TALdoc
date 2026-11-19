@@ -31,7 +31,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
             // telefoni Android moderni (fascia media inclusa) sono tutti arm64: APK molto più leggero
             ndk { abiFilters += listOf("arm64-v8a") }
