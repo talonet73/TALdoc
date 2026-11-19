@@ -10,8 +10,8 @@ android {
   applicationId = "it.tal.taldoc"
   minSdk = 29
   targetSdk = 35
-  versionCode = 7
-  versionName = "0.1.6"
+  versionCode = 8
+  versionName = "0.1.7"
  }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
