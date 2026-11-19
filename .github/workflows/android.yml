@@ -1,31 +1,76 @@
 name: Android APK
 on:
   push:
-    branches: [main]
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Configure Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.10.2'
+          gradle-version: '8.14.3'
+
+      - name: Optional private signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.TALDOC_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "TALDOC_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Unit tests
+        run: gradle --no-daemon testDebugUnitTest
+
       - name: Build APK
-        run: gradle --no-daemon assembleDebug
+        env:
+          TALDOC_KEYSTORE_PASSWORD: ${{ secrets.TALDOC_KEYSTORE_PASSWORD }}
+          TALDOC_KEY_ALIAS: ${{ secrets.TALDOC_KEY_ALIAS }}
+          TALDOC_KEY_PASSWORD: ${{ secrets.TALDOC_KEY_PASSWORD }}
+        run: |
+          gradle --no-daemon assembleDebug assembleRelease
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/TALdoc-AI-$VERSION.apk"
+          ls -la dist
+
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
         with:
-          name: TALdoc-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: TALdoc-apk
+          path: dist/*.apk
           if-no-files-found: error
+
+      - name: GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
