@@ -174,30 +174,51 @@ class MainActivity : ComponentActivity() {
        onValueChange = { query = it },
        modifier = Modifier
         .fillMaxWidth()
-        .heightIn(min = 120.dp, max = 200.dp),
+        .heightIn(min = 100.dp, max = 160.dp),
        label = { Text("Scrivi frase, domanda o richiesta") },
-       placeholder = { Text("Es: riassumi il documento, trascrivi la pagina 2, qual è la data del contratto...") },
-       minLines = 4,
-       maxLines = 8
+       placeholder = { Text("Es: riassumi il documento, trascrivi, qual è la data...") },
+       minLines = 3,
+       maxLines = 6
       )
       Spacer(Modifier.height(6.dp))
       Button(
        onClick = {
-        answer = processQuery(pages, query, mode)
+        status = "Elaborazione in corso..."
+        answer = processQuery(pages.toList(), query, mode)
+        status = "Elaborazione completata"
        },
        enabled = !busy && pages.isNotEmpty()
       ) { Text("Elabora") }
 
+      if (answer.isNotBlank()) {
+       Spacer(Modifier.height(8.dp))
+       Card(
+        modifier = Modifier
+         .fillMaxWidth()
+         .heightIn(max = 220.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+       ) {
+        Column(
+         Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState())
+          .padding(12.dp)
+        ) {
+         Text("Risultato", fontWeight = FontWeight.Bold, color = teal, fontSize = 14.sp)
+         Spacer(Modifier.height(4.dp))
+         Text(answer, fontSize = 13.sp)
+        }
+       }
+      }
+
+      Spacer(Modifier.height(8.dp))
       Text("Elaborazione offline sui documenti della sessione.", fontSize = 11.sp, color = burgundy)
+
       Box(Modifier.weight(1f).fillMaxWidth()) {
        Column(Modifier.verticalScroll(rememberScrollState())) {
-        if (answer.isNotBlank()) {
-         Text(answer, fontSize = 14.sp)
-         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        }
         pages.forEach { page ->
          Text("${page.document} · Pagina ${page.page}", fontWeight = FontWeight.Bold, color = teal)
-         Text(page.text.take(700), fontSize = 13.sp)
+         Text(page.text.take(600), fontSize = 13.sp)
          Spacer(Modifier.height(10.dp))
         }
        }
@@ -216,45 +237,60 @@ class MainActivity : ComponentActivity() {
  private fun processQuery(pages: List<PageText>, rawQuery: String, mode: QueryMode): String {
   val q = rawQuery.trim()
   if (pages.isEmpty()) return "Nessun documento caricato."
-  if (q.isBlank() && mode != QueryMode.TRANSCRIPTION && mode != QueryMode.SUMMARY) return "Inserisci una frase o una domanda."
 
-  return when (mode) {
-   QueryMode.SEARCH -> {
-    val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
-    if (matches.isEmpty()) "Nessun risultato trovato per \"$q\"."
-    else matches.joinToString("\n\n") { "${it.document}, pagina ${it.page}:\n${it.text.take(800)}" }
-   }
-   QueryMode.TRANSCRIPTION -> {
-    val filtered = if (q.isBlank()) pages else pages.filter { it.text.contains(q, ignoreCase = true) || it.document.contains(q, ignoreCase = true) }
-    if (filtered.isEmpty()) "Nessuna pagina corrisponde."
-    else filtered.joinToString("\n\n---\n\n") { "### ${it.document} · Pagina ${it.page}\n${it.text}" }
-   }
-   QueryMode.SUMMARY -> {
-    val full = pages.joinToString("\n") { it.text }
-    val sentences = full.split(Regex("[.!?\\n]+")).map { it.trim() }.filter { it.length > 40 }
-    val scored = sentences.map { s -> s to (if (q.isBlank()) s.length else s.split(q, ignoreCase = true).size - 1 + s.length / 20) }
-     .sortedByDescending { it.second }
-     .take(8)
-     .map { it.first }
-    if (scored.isEmpty()) "Impossibile generare riassunto."
-    else "Riassunto estrattivo (offline):\n\n" + scored.joinToString("\n• ") { "• $it." }
-   }
-   QueryMode.QUESTION -> {
-    val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
-    if (matches.isEmpty()) {
-     "Non ho trovato passaggi espliciti che rispondano a: \"$q\".\n\nTesto disponibile (estratti):\n" +
-      pages.take(3).joinToString("\n\n") { "${it.document} p.${it.page}: ${it.text.take(400)}" }
-    } else {
-     "In base ai documenti caricati:\n\n" +
-      matches.joinToString("\n\n") { p ->
-       val idx = p.text.indexOf(q, ignoreCase = true)
-       val start = (idx - 120).coerceAtLeast(0)
-       val end = (idx + q.length + 280).coerceAtMost(p.text.length)
-       val excerpt = p.text.substring(start, end).trim()
-       "${p.document}, pagina ${p.page}:\n…$excerpt…"
-      }
+  return try {
+   when (mode) {
+    QueryMode.SEARCH -> {
+     if (q.isBlank()) return "Inserisci una parola o una frase da cercare."
+     val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
+     if (matches.isEmpty()) "Nessun risultato trovato per \"$q\"."
+     else matches.joinToString("\n\n") { "${it.document}, pagina ${it.page}:\n${it.text.take(800)}" }
+    }
+    QueryMode.TRANSCRIPTION -> {
+     val filtered = if (q.isBlank()) pages else pages.filter {
+      it.text.contains(q, ignoreCase = true) || it.document.contains(q, ignoreCase = true)
+     }
+     if (filtered.isEmpty()) "Nessuna pagina corrisponde al filtro."
+     else filtered.joinToString("\n\n---\n\n") { "### ${it.document} · Pagina ${it.page}\n${it.text}" }
+    }
+    QueryMode.SUMMARY -> {
+     val full = pages.joinToString("\n") { it.text }
+     if (full.isBlank()) return "Nessun testo da riassumere."
+     val sentences = full.split(Regex("[.!?\\n]+"))
+      .map { it.trim() }
+      .filter { it.length > 30 }
+     if (sentences.isEmpty()) {
+      "Riassunto (testo breve):\n\n" + full.take(1200)
+     } else {
+      val scored = sentences.map { s ->
+       val relevance = if (q.isBlank()) 0 else s.split(q, ignoreCase = true).size - 1
+       s to (relevance * 100 + s.length)
+      }.sortedByDescending { it.second }
+       .take(6)
+       .map { it.first }
+      "Riassunto estrattivo:\n\n" + scored.joinToString("\n\n") { "• $it." }
+     }
+    }
+    QueryMode.QUESTION -> {
+     if (q.isBlank()) return "Scrivi la domanda a cui vuoi rispondere."
+     val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
+     if (matches.isEmpty()) {
+      "Non ho trovato passaggi che contengono le parole della domanda.\n\nEstratti disponibili:\n\n" +
+       pages.take(3).joinToString("\n\n") { "${it.document} p.${it.page}: ${it.text.take(350)}" }
+     } else {
+      "In base ai documenti:\n\n" +
+       matches.joinToString("\n\n") { p ->
+        val idx = p.text.indexOf(q, ignoreCase = true).coerceAtLeast(0)
+        val start = (idx - 150).coerceAtLeast(0)
+        val end = (idx + q.length + 300).coerceAtMost(p.text.length)
+        val excerpt = p.text.substring(start, end).trim()
+        "${p.document}, pagina ${p.page}:\n…$excerpt…"
+       }
+     }
     }
    }
+  } catch (e: Exception) {
+   "Errore durante l'elaborazione: ${e.message}"
   }
  }
 
