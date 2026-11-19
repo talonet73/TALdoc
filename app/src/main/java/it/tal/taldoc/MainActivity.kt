@@ -49,6 +49,15 @@ data class PageText(val document: String, val page: Int, val text: String)
 
 enum class QueryMode { SEARCH, TRANSCRIPTION, SUMMARY, QUESTION }
 
+private val italianStopWords = setOf(
+ "a", "ad", "al", "alla", "alle", "allo", "ai", "agli", "che", "chi", "ci", "con", "come", "cosa",
+ "da", "dal", "dalla", "dalle", "dallo", "dei", "del", "della", "delle", "dello", "di", "e", "ed",
+ "è", "era", "essere", "fa", "fai", "fammi", "il", "in", "io", "la", "le", "li", "lo", "ma", "mi",
+ "ne", "non", "o", "per", "più", "quale", "quali", "quando", "quanto", "que", "questa", "questo",
+ "se", "sei", "si", "su", "sul", "sulla", "ti", "tu", "un", "una", "uno", "dammi", "dimmi", "trova",
+ "cerca", "qual", "è", "sono", "ha", "hanno", "c'è", "ce", "l'", "d'", "un'", "dell'", "all'", "nell'"
+)
+
 class MainActivity : ComponentActivity() {
  private val pages = mutableStateListOf<PageText>()
  private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
@@ -176,7 +185,7 @@ class MainActivity : ComponentActivity() {
         .fillMaxWidth()
         .heightIn(min = 100.dp, max = 160.dp),
        label = { Text("Scrivi frase, domanda o richiesta") },
-       placeholder = { Text("Es: riassumi il documento, trascrivi, qual è la data...") },
+       placeholder = { Text("Es: dammi l'indirizzo di SSI FACTORY, qual è la paga base...") },
        minLines = 3,
        maxLines = 6
       )
@@ -195,7 +204,7 @@ class MainActivity : ComponentActivity() {
        Card(
         modifier = Modifier
          .fillMaxWidth()
-         .heightIn(max = 220.dp),
+         .heightIn(max = 260.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
        ) {
         Column(
@@ -212,7 +221,7 @@ class MainActivity : ComponentActivity() {
       }
 
       Spacer(Modifier.height(8.dp))
-      Text("Elaborazione offline sui documenti della sessione.", fontSize = 11.sp, color = burgundy)
+      Text("Elaborazione offline intelligente sui documenti della sessione.", fontSize = 11.sp, color = burgundy)
 
       Box(Modifier.weight(1f).fillMaxWidth()) {
        Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -232,6 +241,15 @@ class MainActivity : ComponentActivity() {
     }
    }
   }
+ }
+
+ private fun extractKeywords(query: String): List<String> {
+  return query.lowercase()
+   .replace(Regex("[^a-zàèéìòù0-9\\s]"), " ")
+   .split(Regex("\\s+"))
+   .map { it.trim() }
+   .filter { it.length >= 3 && it !in italianStopWords }
+   .distinct()
  }
 
  private fun processQuery(pages: List<PageText>, rawQuery: String, mode: QueryMode): String {
@@ -258,34 +276,49 @@ class MainActivity : ComponentActivity() {
      if (full.isBlank()) return "Nessun testo da riassumere."
      val sentences = full.split(Regex("[.!?\\n]+"))
       .map { it.trim() }
-      .filter { it.length > 30 }
+      .filter { it.length > 25 }
      if (sentences.isEmpty()) {
       "Riassunto (testo breve):\n\n" + full.take(1200)
      } else {
+      val keywords = extractKeywords(q)
       val scored = sentences.map { s ->
-       val relevance = if (q.isBlank()) 0 else s.split(q, ignoreCase = true).size - 1
-       s to (relevance * 100 + s.length)
+       val lower = s.lowercase()
+       val hits = keywords.count { lower.contains(it) }
+       s to (hits * 50 + s.length)
       }.sortedByDescending { it.second }
-       .take(6)
+       .take(7)
        .map { it.first }
       "Riassunto estrattivo:\n\n" + scored.joinToString("\n\n") { "• $it." }
      }
     }
     QueryMode.QUESTION -> {
-     if (q.isBlank()) return "Scrivi la domanda a cui vuoi rispondere."
-     val matches = pages.filter { it.text.contains(q, ignoreCase = true) }
-     if (matches.isEmpty()) {
-      "Non ho trovato passaggi che contengono le parole della domanda.\n\nEstratti disponibili:\n\n" +
-       pages.take(3).joinToString("\n\n") { "${it.document} p.${it.page}: ${it.text.take(350)}" }
-     } else {
-      "In base ai documenti:\n\n" +
-       matches.joinToString("\n\n") { p ->
-        val idx = p.text.indexOf(q, ignoreCase = true).coerceAtLeast(0)
-        val start = (idx - 150).coerceAtLeast(0)
-        val end = (idx + q.length + 300).coerceAtMost(p.text.length)
-        val excerpt = p.text.substring(start, end).trim()
-        "${p.document}, pagina ${p.page}:\n…$excerpt…"
+     if (q.isBlank()) return "Scrivi la domanda."
+     val keywords = extractKeywords(q)
+     if (keywords.isEmpty()) return "Non ho capito le parole chiave della domanda. Prova a riformularla."
+
+     data class ScoredPassage(val page: PageText, val text: String, val score: Int)
+
+     val candidates = mutableListOf<ScoredPassage>()
+     for (page in pages) {
+      val chunks = page.text.split(Regex("[.!?\\n]+")).map { it.trim() }.filter { it.length > 15 }
+      for (chunk in chunks) {
+       val lower = chunk.lowercase()
+       val hits = keywords.count { lower.contains(it) }
+       if (hits > 0) {
+        val bonus = keywords.sumOf { kw -> if (lower.contains(kw) && kw.length >= 5) 2 else 0 }
+        candidates.add(ScoredPassage(page, chunk, hits * 10 + bonus))
        }
+      }
+     }
+
+     val best = candidates.sortedByDescending { it.score }.distinctBy { it.text }.take(5)
+     if (best.isEmpty()) {
+      "Non ho trovato passaggi rilevanti per: ${keywords.joinToString(", ")}.\n\nProva con parole più specifiche presenti nel documento."
+     } else {
+      val answerLines = best.joinToString("\n\n") { p ->
+       "${p.page.document} · pagina ${p.page.page}:\n${p.text}"
+      }
+      "Risposta basata sui documenti (parole chiave: ${keywords.joinToString(", ")}):\n\n$answerLines"
      }
     }
    }
