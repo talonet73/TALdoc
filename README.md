@@ -41,7 +41,7 @@ Installazione: apri l'APK sul telefono e consenti «Installa app sconosciute». 
 - Kotlin + Jetpack Compose, `minSdk 29`.
 - Logica di analisi in `app/src/main/java/it/tal/taldoc/core` (Kotlin puro, testata con JUnit: `gradle testDebugUnitTest`).
 - Lettori DOC/XLS (OLE2/BIFF8), DOCX/XLSX/ODT/ODS/RTF scritti da zero, senza dipendenze pesanti; PDF con PdfBox-Android (testo nativo) + OCR ML Kit per le pagine scansionate.
-- Ogni push compila ed esegue i test su GitHub Actions; un tag `v*` pubblica la release con l'APK firmato.
+- Ogni push compila ed esegue i test su GitHub Actions; ogni push su `main` pubblica (o aggiorna) la release `v<versionName>` con l'APK firmato: per una nuova versione basta aumentare `versionName`/`versionCode`.
 
 ### Firma dell'APK
 

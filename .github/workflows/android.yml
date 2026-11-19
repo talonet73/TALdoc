@@ -49,6 +49,7 @@ jobs:
         run: |
           gradle --no-daemon assembleDebug assembleRelease
           VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk "dist/TALdoc-AI-$VERSION.apk"
           ls -la dist
@@ -69,9 +70,15 @@ jobs:
           if-no-files-found: error
 
       - name: GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        # ogni push su main con una nuova versionName pubblica (o aggiorna) la release vX.Y.Z
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
+          name: TALdoc AI ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          overwrite_files: true
           files: dist/*.apk
           generate_release_notes: true
           body_path: RELEASE_NOTES.md
