@@ -55,7 +55,7 @@ private val italianStopWords = setOf(
  "è", "era", "essere", "fa", "fai", "fammi", "il", "in", "io", "la", "le", "li", "lo", "ma", "mi",
  "ne", "non", "o", "per", "più", "quale", "quali", "quando", "quanto", "que", "questa", "questo",
  "se", "sei", "si", "su", "sul", "sulla", "ti", "tu", "un", "una", "uno", "dammi", "dimmi", "trova",
- "cerca", "qual", "è", "sono", "ha", "hanno", "c'è", "ce", "l'", "d'", "un'", "dell'", "all'", "nell'"
+ "cerca", "qual", "sono", "ha", "hanno", "ce", "l", "d", "un", "dell", "all", "nell"
 )
 
 class MainActivity : ComponentActivity() {
@@ -245,8 +245,8 @@ class MainActivity : ComponentActivity() {
 
  private fun extractKeywords(query: String): List<String> {
   return query.lowercase()
-   .replace(Regex("[^a-zàèéìòù0-9\\s]"), " ")
-   .split(Regex("\\s+"))
+   .replace(Regex("[^a-zàèéìòù0-9 ]"), " ")
+   .split(" ")
    .map { it.trim() }
    .filter { it.length >= 3 && it !in italianStopWords }
    .distinct()
