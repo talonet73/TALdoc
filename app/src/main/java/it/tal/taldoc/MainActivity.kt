@@ -49,6 +49,8 @@ data class PageText(val document: String, val page: Int, val text: String)
 
 enum class QueryMode { SEARCH, TRANSCRIPTION, SUMMARY, QUESTION }
 
+data class ScoredPassage(val page: PageText, val text: String, val score: Int)
+
 private val italianStopWords = setOf(
  "a", "ad", "al", "alla", "alle", "allo", "ai", "agli", "che", "chi", "ci", "con", "come", "cosa",
  "da", "dal", "dalla", "dalle", "dallo", "dei", "del", "della", "delle", "dello", "di", "e", "ed",
@@ -299,8 +301,6 @@ class MainActivity : ComponentActivity() {
      if (q.isBlank()) return "Scrivi la domanda."
      val keywords = extractKeywords(q)
      if (keywords.isEmpty()) return "Non ho capito le parole chiave della domanda. Prova a riformularla."
-
-     data class ScoredPassage(val page: PageText, val text: String, val score: Int)
 
      val candidates = mutableListOf<ScoredPassage>()
      for (page in pages) {
