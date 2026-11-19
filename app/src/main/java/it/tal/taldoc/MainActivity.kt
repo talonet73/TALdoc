@@ -57,7 +57,9 @@ private val italianStopWords = setOf(
  "è", "era", "essere", "fa", "fai", "fammi", "il", "in", "io", "la", "le", "li", "lo", "ma", "mi",
  "ne", "non", "o", "per", "più", "quale", "quali", "quando", "quanto", "que", "questa", "questo",
  "se", "sei", "si", "su", "sul", "sulla", "ti", "tu", "un", "una", "uno", "dammi", "dimmi", "trova",
- "cerca", "qual", "sono", "ha", "hanno", "ce", "l", "d", "dell", "all", "nell"
+ "cerca", "qual", "sono", "ha", "hanno", "ce", "l", "d", "dell", "all", "nell",
+ "dice", "dire", "significa", "vuol", "dire", "che", "cosa", "che", "il", "la", "di", "del", "della",
+ "codice", "cod", "numero", "n"
 )
 
 class MainActivity : ComponentActivity() {
@@ -247,9 +249,14 @@ class MainActivity : ComponentActivity() {
 
 private fun extractKeywords(query: String): List<String> {
  val cleaned = query.lowercase().replace(Regex("[^a-zàèéìòù0-9 ]"), " ")
- val words = cleaned.split(" ").map { it.trim() }.filter { it.length >= 3 && it !in italianStopWords }
+ val parts = cleaned.split(" ").map { it.trim() }.filter { it.isNotEmpty() }
+ val words = parts.filter { (it.length >= 3 && it !in italianStopWords) || it.matches(Regex("\\d+")) }
  val entities = extractEntities(query).map { it.lowercase() }
  return (words + entities).distinct()
+}
+
+private fun extractCodes(query: String): List<String> {
+ return Regex("""\b(\d{3,6})\b""").findAll(query).map { it.value }.distinct().toList()
 }
 
 private fun splitIntoChunks(text: String): List<String> {
@@ -331,6 +338,25 @@ private fun processQuery(pages: List<PageText>, rawQuery: String, mode: QueryMod
     val keywords = extractKeywords(q)
     val entities = extractEntities(q)
     val intent = detectIntent(q)
+    val codes = extractCodes(q)
+
+    // Special handling for code lookups (e.g. "codice 8002", "cosa dice 8002")
+    if (codes.isNotEmpty()) {
+     val codeResults = mutableListOf<String>()
+     for (page in pages) {
+      val lines = page.text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+      for (code in codes) {
+       val matching = lines.filter { it.contains(code) }
+       matching.forEach { line ->
+        codeResults.add("${page.document} · pagina ${page.page}:\n$line")
+       }
+      }
+     }
+     if (codeResults.isNotEmpty()) {
+      return "Codice ${codes.joinToString(", ")}:\n\n" + codeResults.distinct().take(5).joinToString("\n\n")
+     }
+    }
+
     if (keywords.isEmpty() && entities.isEmpty()) return "Non ho capito le parole chiave della domanda. Prova a riformularla."
 
     val candidates = mutableListOf<ScoredPassage>()
