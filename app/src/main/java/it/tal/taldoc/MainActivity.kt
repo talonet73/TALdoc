@@ -55,7 +55,7 @@ private val italianStopWords = setOf(
  "è", "era", "essere", "fa", "fai", "fammi", "il", "in", "io", "la", "le", "li", "lo", "ma", "mi",
  "ne", "non", "o", "per", "più", "quale", "quali", "quando", "quanto", "que", "questa", "questo",
  "se", "sei", "si", "su", "sul", "sulla", "ti", "tu", "un", "una", "uno", "dammi", "dimmi", "trova",
- "cerca", "qual", "sono", "ha", "hanno", "ce", "l", "d", "un", "dell", "all", "nell"
+ "cerca", "qual", "sono", "ha", "hanno", "ce", "l", "d", "dell", "all", "nell"
 )
 
 class MainActivity : ComponentActivity() {
@@ -252,6 +252,12 @@ class MainActivity : ComponentActivity() {
    .distinct()
  }
 
+ private fun splitIntoChunks(text: String): List<String> {
+  return text.replace("\n", ". ").split(". ", "! ", "? ")
+   .map { it.trim() }
+   .filter { it.length > 15 }
+ }
+
  private fun processQuery(pages: List<PageText>, rawQuery: String, mode: QueryMode): String {
   val q = rawQuery.trim()
   if (pages.isEmpty()) return "Nessun documento caricato."
@@ -274,9 +280,7 @@ class MainActivity : ComponentActivity() {
     QueryMode.SUMMARY -> {
      val full = pages.joinToString("\n") { it.text }
      if (full.isBlank()) return "Nessun testo da riassumere."
-     val sentences = full.split(Regex("[.!?\\n]+"))
-      .map { it.trim() }
-      .filter { it.length > 25 }
+     val sentences = splitIntoChunks(full)
      if (sentences.isEmpty()) {
       "Riassunto (testo breve):\n\n" + full.take(1200)
      } else {
@@ -300,7 +304,7 @@ class MainActivity : ComponentActivity() {
 
      val candidates = mutableListOf<ScoredPassage>()
      for (page in pages) {
-      val chunks = page.text.split(Regex("[.!?\\n]+")).map { it.trim() }.filter { it.length > 15 }
+      val chunks = splitIntoChunks(page.text)
       for (chunk in chunks) {
        val lower = chunk.lowercase()
        val hits = keywords.count { lower.contains(it) }
