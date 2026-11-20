@@ -52,10 +52,16 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import it.tal.taldoc.core.Mode
 import java.io.File
 
-private val Teal = Color(0xFF007C80)
-private val Burgundy = Color(0xFF8C2945)
-private val Ochre = Color(0xFFD4A52A)
-private val Paper = Color(0xFFF6F8F8)
+// Stile Windows XP (Luna)
+private val XpTitleBlue = Color(0xFF003399)
+private val XpHighlight = Color(0xFF316AC5)
+private val XpBackground = Color(0xFFECE9D8)
+private val XpButtonFace = Color(0xFFD4D0C8)
+private val XpText = Color(0xFF000000)
+private val Teal = XpTitleBlue      // alias per compatibilità
+private val Burgundy = Color(0xFF8B0000)
+private val Ochre = Color(0xFFFFCC00)
+private val Paper = XpBackground
 
 private const val MODEL_PAGE = "https://huggingface.co/litert-community/Gemma3-1B-IT"
 
@@ -149,14 +155,14 @@ private fun App(vm: MainViewModel, onExit: () -> Unit) {
     }
 
     Scaffold(
-        containerColor = Paper,
+        containerColor = XpBackground,
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DocumentScanner, null, tint = Teal, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Default.DocumentScanner, null, tint = Color.White, modifier = Modifier.size(28.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("TALdoc AI", fontWeight = FontWeight.Bold, color = Teal)
+                        Text("TALdoc AI", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 },
                 actions = {
@@ -175,7 +181,11 @@ private fun App(vm: MainViewModel, onExit: () -> Unit) {
                         DropdownMenuItem(text = { Text("Esci e cancella", color = Burgundy) }, onClick = { menu = false; onExit() })
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = XpTitleBlue,
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                ),
             )
         },
     ) { padding ->
@@ -229,7 +239,7 @@ private fun AiChip(vm: MainViewModel, onClick: () -> Unit) {
 
 @Composable
 private fun DocumentsBar(vm: MainViewModel, onImport: () -> Unit, onScan: () -> Unit, onPhoto: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 12.dp, vertical = 6.dp)) {
+    Column(Modifier.fillMaxWidth().background(XpBackground).padding(horizontal = 12.dp, vertical = 6.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onImport, enabled = !vm.busy, contentPadding = PaddingValues(horizontal = 12.dp)) {
                 Icon(Icons.Default.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Importa")
@@ -390,7 +400,7 @@ private fun InputBar(vm: MainViewModel, input: String, onInput: (String) -> Unit
         Mode.MISSING -> "Premi Esegui per cercare parti mancanti"
         Mode.CALC -> "Premi Esegui per verificare totali e calcoli"
     }
-    Surface(color = Color.White, shadowElevation = 6.dp) {
+    Surface(color = XpButtonFace, shadowElevation = 2.dp) {
         Row(Modifier.fillMaxWidth().padding(8.dp).navigationBarsPadding(), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
                 value = input,

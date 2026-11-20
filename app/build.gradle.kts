@@ -14,8 +14,8 @@ android {
         applicationId = "it.tal.taldoc"
         minSdk = 29
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.0"
+        versionCode = 12
+        versionName = "0.2.0-xp"
     }
 
     signingConfigs {
